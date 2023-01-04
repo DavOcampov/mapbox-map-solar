@@ -3,7 +3,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
-import 'package:mapbox_v2/utils/conditions_map.dart';
+//import 'package:mapbox_v2/utils/conditions_map.dart';
 import 'package:turf/turf.dart';
 import 'package:http/http.dart' as http;
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
@@ -43,14 +43,25 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     MapboxStyles.OUTDOORS,
     MapboxStyles.TRAFFIC_DAY,
     MapboxStyles.TRAFFIC_NIGHT,
-    MapboxStyles.SATELLITE,
     MapboxStyles.SATELLITE_STREETS
   ];
+
+  List<String> styleStringsLayer = [
+    'mapbox://styles/algoritmia/clcb3serk000b14rop5j8cyxe',
+    'mapbox://styles/algoritmia/clchuhhe1005a14pa7xhe4gwp',
+    'mapbox://styles/algoritmia/clchtzym5002h14pnjxzv82b0',
+    'mapbox://styles/algoritmia/clchtrxr4002j14o2jn148bna',
+    'mapbox://styles/algoritmia/clchuzk40000c16qux6c4uo16',
+    'mapbox://styles/algoritmia/clchum7sv001g14ohujg8m15f',
+    'mapbox://styles/algoritmia/clcht97a8000714pkgp50l9aa',
+  ];
+
   int styleIndex = 0;
   String dniData = 'N/A';
   bool hasExecuted = true;
   bool isLoading = false;
   bool isSelected = false;
+  bool removeLayer = false;
 
   @override
   void initState() {
@@ -66,7 +77,13 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   onMapCreated(MapboxMap mapboxMap) async {
     if (!hasExecuted) {
       this.mapboxMap = mapboxMap;
-      await addLayer();
+      //await addLayer();
+      if (removeLayer) {
+        await mapboxMap.style.setStyleURI(styleStrings[styleIndex]);
+      } else {
+        await mapboxMap.style.setStyleURI(styleStringsLayer[styleIndex]);
+      }
+
       hasExecuted = true;
     }
 
@@ -74,12 +91,12 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     //await mapboxMap.style.setStyleURI("mapbox://styles/algoritmia/clcb3serk000b14rop5j8cyxe");
   }
 
-  addLayer() async {
+  /* addLayer() async {
     var data = await rootBundle.loadString('assets/file.geojson');
     await mapboxMap?.style.addSource(GeoJsonSource(id: "line", data: data));
     await mapboxMap?.style.addLayer(FillLayer(id: "solar_layer", sourceId: "line", fillOpacity: 0.3));
     await mapboxMap?.style.setStyleLayerProperty("solar_layer", "fill-color", MapProperties.valueProperty);
-  }
+  } */
 
 // On Tap Map ------------------------------------------------
   _onTap(ScreenCoordinate coordinate) async {
@@ -294,32 +311,252 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                                     textAlign: TextAlign.center),
                                 Row(
                                   children: [
-                                    Checkbox(
+                                    /* Checkbox(
                                       value: styleIndex == 0 ? true : false,
-                                      onChanged: (bool? value) {
+                                      onChanged: (bool? value) async {
                                         setState(() {
                                           styleIndex = 0;
                                         });
-                                        mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        if (removeLayer) {
+                                          await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        } else {
+                                          await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                        }
                                       },
                                     ),
                                     Checkbox(
                                       value: styleIndex == 1 ? true : false,
-                                      onChanged: (bool? value) {
+                                      onChanged: (bool? value) async {
                                         setState(() {
                                           styleIndex = 1;
                                         });
-                                        mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        if (removeLayer) {
+                                          await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        } else {
+                                          await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                        }
                                       },
                                     ),
                                     Checkbox(
                                       value: styleIndex == 2 ? true : false,
-                                      onChanged: (bool? value) {
+                                      onChanged: (bool? value) async {
                                         setState(() {
                                           styleIndex = 2;
                                         });
-                                        mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        if (removeLayer) {
+                                          await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        } else {
+                                          await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                        }
                                       },
+                                    ),
+                                    /* Checkbox(
+                                      value: removeLayer,
+                                      onChanged: (value) async {
+                                        setState(() {
+                                          removeLayer = !removeLayer;
+                                        });
+                                        if (removeLayer) {
+                                          await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        } else {
+                                          await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                        }
+                                      },
+                                    ), */
+                                    Switch(
+                                      value: !removeLayer,
+                                      onChanged: (value) async {
+                                        HapticFeedback.heavyImpact();
+                                        setState(() {
+                                          removeLayer = !removeLayer;
+                                        });
+                                        if (removeLayer) {
+                                          await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                        } else {
+                                          await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                        }
+                                      },
+                                    ), */
+
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 15.0, bottom: 15.0),
+                                      child: IconButton(
+                                          splashRadius: 56,
+                                          iconSize: 79,
+                                          onPressed: () async {
+                                            setState(() {
+                                              styleIndex = 0;
+                                            });
+                                            if (removeLayer) {
+                                              await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                            } else {
+                                              await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                            }
+                                          },
+                                          icon: Column(
+                                            children: [
+                                              Container(
+                                                width: 55,
+                                                height: 55,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(7.0),
+                                                  border: Border.all(
+                                                    style: styleIndex == 0 ? BorderStyle.solid : BorderStyle.none,
+                                                    color: Colors.blue,
+                                                    width: 3,
+                                                  ),
+                                                ),
+                                                child: Container(
+                                                  margin: const EdgeInsets.all(1.5),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(5.0),
+                                                    child: Image.asset(
+                                                      'assets/normal.png',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: 6,
+                                              ),
+                                              const Text('Estándar')
+                                            ],
+                                          )),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 15.0, bottom: 15.0),
+                                      child: IconButton(
+                                          splashRadius: 56,
+                                          iconSize: 79,
+                                          onPressed: () async {
+                                            setState(() {
+                                              styleIndex = 1;
+                                            });
+                                            if (removeLayer) {
+                                              await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                            } else {
+                                              await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                            }
+                                          },
+                                          icon: Column(
+                                            children: [
+                                              Container(
+                                                width: 55,
+                                                height: 55,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(7.0),
+                                                  border: Border.all(
+                                                    style: styleIndex == 1 ? BorderStyle.solid : BorderStyle.none,
+                                                    color: Colors.blue,
+                                                    width: 3,
+                                                  ),
+                                                ),
+                                                child: Container(
+                                                  margin: const EdgeInsets.all(1.5),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(5.0),
+                                                    child: Image.asset(
+                                                      'assets/dark.png',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: 6,
+                                              ),
+                                              const Text('Noche')
+                                            ],
+                                          )),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 15.0, bottom: 15.0),
+                                      child: IconButton(
+                                          splashRadius: 56,
+                                          iconSize: 79,
+                                          onPressed: () async {
+                                            setState(() {
+                                              styleIndex = 6;
+                                            });
+                                            if (removeLayer) {
+                                              await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                            } else {
+                                              await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                            }
+                                          },
+                                          icon: Column(
+                                            children: [
+                                              Container(
+                                                width: 55,
+                                                height: 55,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(7.0),
+                                                  border: Border.all(
+                                                    style: styleIndex == 6 ? BorderStyle.solid : BorderStyle.none,
+                                                    color: Colors.blue,
+                                                    width: 3,
+                                                  ),
+                                                ),
+                                                child: Container(
+                                                  margin: const EdgeInsets.all(1.5),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(5.0),
+                                                    child: Image.asset(
+                                                      'assets/satellite.jfif',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: 6,
+                                              ),
+                                              const Text('Satélite')
+                                            ],
+                                          )),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 15.0, bottom: 15.0),
+                                      child: IconButton(
+                                          splashRadius: 56,
+                                          iconSize: 79,
+                                          onPressed: () async {
+                                            setState(() {
+                                              styleIndex = 4;
+                                            });
+                                            if (removeLayer) {
+                                              await mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                            } else {
+                                              await mapboxMap?.style.setStyleURI(styleStringsLayer[styleIndex]);
+                                            }
+                                          },
+                                          icon: Column(
+                                            children: [
+                                              Container(
+                                                width: 55,
+                                                height: 55,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(7.0),
+                                                  border: Border.all(
+                                                    style: styleIndex == 4 ? BorderStyle.solid : BorderStyle.none,
+                                                    color: Colors.blue,
+                                                    width: 3,
+                                                  ),
+                                                ),
+                                                child: Container(
+                                                  margin: const EdgeInsets.all(1.5),
+                                                  child: ClipRRect(
+                                                    borderRadius: BorderRadius.circular(5.0),
+                                                    child: Image.asset(
+                                                      'assets/street.png',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                height: 6,
+                                              ),
+                                              const Text('Calles')
+                                            ],
+                                          )),
                                     )
                                   ],
                                 )
@@ -376,7 +613,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                 onTapListener: _onTap,
                 cameraOptions: CameraOptions(
                   center: Point(coordinates: Position(-73.301214, 4.0478237)).toJson(),
-                  zoom: 5,
+                  zoom: 6,
                 ),
               ),
             radiationWidget(),
