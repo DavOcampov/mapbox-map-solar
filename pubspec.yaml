@@ -39,6 +39,7 @@ dependencies:
   mapbox_maps_flutter: ^0.3.0
   turf: ^0.0.7
   http: ^0.13.5
+  modal_bottom_sheet: ^2.1.2
 
 dev_dependencies:
   flutter_test:

@@ -6,6 +6,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:mapbox_v2/utils/conditions_map.dart';
 import 'package:turf/turf.dart';
 import 'package:http/http.dart' as http;
+import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 
 void main() {
   runApp(const MyApp());
@@ -30,7 +31,7 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
+class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateMixin {
   MapboxMap? mapboxMap;
   PointAnnotation? pointAnnotation;
   PointAnnotationManager? pointAnnotationManager;
@@ -45,14 +46,16 @@ class _MyHomePageState extends State<MyHomePage> {
     MapboxStyles.SATELLITE,
     MapboxStyles.SATELLITE_STREETS
   ];
-
   int styleIndex = 0;
-
-  String dniData = '';
+  String dniData = 'N/A';
+  bool hasExecuted = true;
+  bool isLoading = false;
+  bool isSelected = false;
 
   @override
   void initState() {
     super.initState();
+    hasExecuted = false;
   }
 
   @override
@@ -61,33 +64,68 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   onMapCreated(MapboxMap mapboxMap) async {
-    this.mapboxMap = mapboxMap;
-
-    var data = await rootBundle.loadString('assets/file.geojson');
-    await mapboxMap.style.addSource(GeoJsonSource(id: "line", data: data));
-    await mapboxMap.style.addLayer(FillLayer(id: "solar_layer", sourceId: "line", fillOpacity: 0.3));
-
-    await mapboxMap.style.setStyleLayerProperty("solar_layer", "fill-color", MapProperties.valueProperty);
+    if (!hasExecuted) {
+      this.mapboxMap = mapboxMap;
+      await addLayer();
+      hasExecuted = true;
+    }
 
     // Cargar estilo del mapa desde Mapbox Studio
     //await mapboxMap.style.setStyleURI("mapbox://styles/algoritmia/clcb3serk000b14rop5j8cyxe");
   }
 
+  addLayer() async {
+    var data = await rootBundle.loadString('assets/file.geojson');
+    await mapboxMap?.style.addSource(GeoJsonSource(id: "line", data: data));
+    await mapboxMap?.style.addLayer(FillLayer(id: "solar_layer", sourceId: "line", fillOpacity: 0.3));
+    await mapboxMap?.style.setStyleLayerProperty("solar_layer", "fill-color", MapProperties.valueProperty);
+  }
+
 // On Tap Map ------------------------------------------------
   _onTap(ScreenCoordinate coordinate) async {
-    log("OnTap ${coordinate.x} ${coordinate.y}");
-    Map data = await getIrradiance(coordinate.x, coordinate.y);
-
-    if (data.isNotEmpty) {
-      if ((data["annual"]['data'] as Map)['DNI'] != null) {
-        double dniDay = ((data["annual"]['data'] as Map)['DNI']) / 365;
-        double dni = double.parse(dniDay.toStringAsFixed(2));
-
-        setState(() {
-          dniData = "$dni kwh/m2/Día";
-        });
+    if (!isLoading) {
+      log("OnTap ${coordinate.x} ${coordinate.y}");
+      // Funcion para agrega y actualizar el marcador al mapa
+      if (pointAnnotation != null) {
+        // var point = Point.fromJson((pointAnnotation!.geometry)!.cast());
+        var newPoint = Point(coordinates: Position(coordinate.y, coordinate.x));
+        pointAnnotation?.geometry = newPoint.toJson();
+        pointAnnotationManager?.update(pointAnnotation!);
       } else {
+        mapboxMap?.annotations.createPointAnnotationManager().then((value) async {
+          pointAnnotationManager = value;
+          final ByteData bytes = await rootBundle.load('assets/marker.png');
+          final Uint8List list = bytes.buffer.asUint8List();
+          createOneAnnotation(list, coordinate.y, coordinate.x);
+        });
+      }
+
+      try {
+        var data = await getIrradiance(coordinate.x, coordinate.y);
+        if (data.isNotEmpty || data == null) {
+          if ((data["annual"]['data'] as Map)['DNI'] != null) {
+            double dniDay = ((data["annual"]['data'] as Map)['DNI']) / 365;
+            double dni = double.parse(dniDay.toStringAsFixed(2));
+
+            setState(() {
+              isLoading = false;
+              dniData = "$dni kwh/m²/Día";
+            });
+          } else {
+            setState(() {
+              isLoading = false;
+              dniData = 'N/A';
+            });
+          }
+        } else {
+          setState(() {
+            isLoading = false;
+            dniData = 'N/A';
+          });
+        }
+      } catch (e) {
         setState(() {
+          isLoading = false;
           dniData = 'N/A';
         });
       }
@@ -103,7 +141,6 @@ class _MyHomePageState extends State<MyHomePage> {
               x,
               y,
             )).toJson(),
-            textColor: Colors.red.value,
             iconSize: 0.9,
             iconOffset: [0.0, -15.0],
             symbolSortKey: 10,
@@ -113,21 +150,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   // Funcion para leer la radiacion desde la api
   Future getIrradiance(double x, double y) async {
+    if (isLoading) return;
+    isLoading = true;
+    setState(() {});
     final http.Response response;
-    // Funcion para agrega y actualizar el marcador al mapa
-    if (pointAnnotation != null) {
-      // var point = Point.fromJson((pointAnnotation!.geometry)!.cast());
-      var newPoint = Point(coordinates: Position(y, x));
-      pointAnnotation?.geometry = newPoint.toJson();
-      pointAnnotationManager?.update(pointAnnotation!);
-    } else {
-      mapboxMap?.annotations.createPointAnnotationManager().then((value) async {
-        pointAnnotationManager = value;
-        final ByteData bytes = await rootBundle.load('assets/marker.png');
-        final Uint8List list = bytes.buffer.asUint8List();
-        createOneAnnotation(list, y, x);
-      });
-    }
 
     // Api de globalsolaratlas para consultar la radiacion solar anual
     String urlSolaris = "https://api.globalsolaratlas.info/data/lta?loc=$x,$y";
@@ -169,7 +195,7 @@ class _MyHomePageState extends State<MyHomePage> {
   } */
 
   // contenedor q muestra la distancia de una ruta entre ambos puntos
-  distanceWidget() {
+  radiationWidget() {
     return Positioned(
       top: 70,
       right: 0,
@@ -178,35 +204,148 @@ class _MyHomePageState extends State<MyHomePage> {
           color: Colors.black,
           borderRadius: BorderRadius.only(topLeft: Radius.circular(15), bottomLeft: Radius.circular(15)),
         ),
-        width: 110,
-        height: 40,
+        width: 123,
+        height: 45,
         child: Row(
           children: [
             Padding(
-              padding: const EdgeInsets.only(left: 6, top: 6),
+              padding: const EdgeInsets.only(left: 7, top: 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Radiacion: ',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                  Row(
+                    children: const [
+                      Icon(
+                        Icons.sunny,
+                        color: Colors.yellow,
+                        size: 20.0,
+                      ),
+                      Text(
+                        ' Radiación:',
+                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
-                  Text(
-                    dniData,
-                    style: const TextStyle(color: Colors.white, fontSize: 11),
-                  ),
+                  if (isLoading)
+                    Container(
+                      width: 112,
+                      alignment: Alignment.center,
+                      child: Flex(
+                          direction: Axis.vertical,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: const [
+                            SizedBox(
+                              height: 14,
+                              width: 14,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.0),
+                            ),
+                          ]),
+                    )
+                  else
+                    Text(
+                      '  $dniData',
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
                 ],
               ),
             ),
             const Spacer(),
             Container(
-              height: 40,
+              height: 45,
               width: 4,
               decoration: const BoxDecoration(color: Colors.red),
             )
           ],
         ),
       ),
+    );
+  }
+
+  changeTypeMap(context) {
+    return Positioned(
+      top: 130,
+      right: 10,
+      child: Container(
+        alignment: Alignment.center,
+        width: 40.0,
+        height: 40.0,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black,
+        ),
+        child: IconButton(
+            onPressed: () {
+              showMaterialModalBottomSheet(
+                  context: context,
+                  builder: (BuildContext context) => StatefulBuilder(builder: (BuildContext context, StateSetter setState) {
+                        return Material(
+                            child: SafeArea(
+                          top: false,
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                const Text('Tipo de mapa',
+                                    style: TextStyle(
+                                        fontSize: 15, color: Colors.black, fontWeight: FontWeight.w500, fontFamily: 'FiraSans'),
+                                    textAlign: TextAlign.center),
+                                Row(
+                                  children: [
+                                    Checkbox(
+                                      value: styleIndex == 0 ? true : false,
+                                      onChanged: (bool? value) {
+                                        setState(() {
+                                          styleIndex = 0;
+                                        });
+                                        mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                      },
+                                    ),
+                                    Checkbox(
+                                      value: styleIndex == 1 ? true : false,
+                                      onChanged: (bool? value) {
+                                        setState(() {
+                                          styleIndex = 1;
+                                        });
+                                        mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                      },
+                                    ),
+                                    Checkbox(
+                                      value: styleIndex == 2 ? true : false,
+                                      onChanged: (bool? value) {
+                                        setState(() {
+                                          styleIndex = 2;
+                                        });
+                                        mapboxMap?.style.setStyleURI(styleStrings[styleIndex]);
+                                      },
+                                    )
+                                  ],
+                                )
+                              ],
+                            ),
+                          ),
+                        ));
+                      }));
+            },
+            icon: const Icon(
+              Icons.layers_outlined,
+              color: Colors.white,
+              size: 25.0,
+            )),
+      ),
+    );
+  }
+
+  btnSaveData() {
+    return FloatingActionButton.extended(
+      onPressed: () {
+        log(dniData);
+        Navigator.pop(context);
+      },
+      label: const Text('Guardar & salir'),
+      icon: const Icon(Icons.save),
     );
   }
 
@@ -240,7 +379,15 @@ class _MyHomePageState extends State<MyHomePage> {
                   zoom: 5,
                 ),
               ),
-            distanceWidget(),
+            radiationWidget(),
+            changeTypeMap(context),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20.0),
+              child: Container(
+                alignment: Alignment.bottomCenter,
+                child: btnSaveData(),
+              ),
+            )
           ]),
         ),
       ),
