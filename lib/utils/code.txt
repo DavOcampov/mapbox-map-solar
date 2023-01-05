@@ -1,0 +1,36 @@
+// Agregar layer localmente
+/* addLayer() async {
+    var data = await rootBundle.loadString('assets/file.geojson');
+    await mapboxMap?.style.addSource(GeoJsonSource(id: "line", data: data));
+    await mapboxMap?.style.addLayer(FillLayer(id: "solar_layer", sourceId: "line", fillOpacity: 0.3));
+    await mapboxMap?.style.setStyleLayerProperty("solar_layer", "fill-color", MapProperties.valueProperty);
+  } */
+
+
+// Api para leer las propiedades del layer y capturar radicacion desde el tileset en Mapbox
+    // ignore: unused_local_variable
+    // String urlMapbox = "https://api.mapbox.com/v4/algoritmia.82i9r5nq/tilequery/$y,$x.json?access_token=pk.eyJ1IjoiYWxnb3JpdG1pYSIsImEiOiJjbDd6OGRpaXkxOHAzM3ZvYXNkbjNucHJ3In0.Y51Nnul9mCcuqzO0wDDJrA";
+
+
+// Mostrar radiacion solar desde el archivo geojson o tileset local
+  /* void _clickMap(ScreenCoordinate coordinate) async {
+    log("OnTap ${coordinate.x} ${coordinate.y}");
+
+    ScreenCoordinate coordin = await mapboxMap!.pixelForCoordinate({
+      "coordinates": [coordinate.y, coordinate.x]
+    });
+
+    List<QueriedFeature?> features = await mapboxMap!.queryRenderedFeatures(
+        RenderedQueryGeometry(type: Type.SCREEN_COORDINATE, value: json.encode(coordin.encode())), RenderedQueryOptions());
+
+    if (features.isNotEmpty) {
+      if ((features[0]!.feature["properties"] as Map)['description'] != null) {
+        var radiation = (features[0]!.feature["properties"] as Map)['description'];
+        log("Radiacion $radiation kWh/m2/día");
+      } else {
+        log('No hay inforacion para estas coordenadas');
+      }
+    } else {
+      log('Informacion solo disponible para Colombia');
+    } 
+  } */
