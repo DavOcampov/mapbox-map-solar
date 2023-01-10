@@ -1,13 +1,20 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
-import 'package:turf/turf.dart';
 import 'package:http/http.dart' as http;
+import 'package:mapbox_v2/widgets/widgets.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart' as geolocator;
+import 'package:turf/turf.dart' as turf;
+import 'package:location/location.dart' as loc;
+import 'package:fluttertoast/fluttertoast.dart';
+
+GlobalKey globalKey = GlobalKey();
 
 void main() {
   runApp(const MyApp());
@@ -36,12 +43,18 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   MapboxMap? mapboxMap;
   PointAnnotation? pointAnnotation;
   PointAnnotationManager? pointAnnotationManager;
+  late FToast fToast;
   String dniData = 'N/A';
   bool hasExecuted = true;
   bool isLoading = false;
   bool isSelected = false;
   int _styleIndex = 0;
   bool _removeLayer = false;
+  final double _zoom = 5;
+  final List<dynamic> _position = [4.0478237, -73.301214];
+  final geolocator.GeolocatorPlatform _geolocatorPlatform = geolocator.GeolocatorPlatform.instance;
+  StreamSubscription<geolocator.ServiceStatus>? _serviceStatusStreamSubscription;
+  loc.Location location = loc.Location();
 
   List<String> styleStrings = [
     MapboxStyles.MAPBOX_STREETS,
@@ -70,7 +83,10 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     getPreferencer();
+    toggleServiceStatusStream();
     hasExecuted = false;
+    fToast = FToast();
+    fToast.init(context);
   }
 
   @override
@@ -78,12 +94,53 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     super.dispose();
   }
 
+  _eventObserver(Event event) {
+    print("Receive event, type: ${event.type}, data: ${event.data}");
+  }
+
+  // Escuchador de eventos para verificar si esta encendido o no el servicio del GPS
+  toggleServiceStatusStream() {
+    if (_serviceStatusStreamSubscription == null) {
+      final serviceStatusStream = _geolocatorPlatform.getServiceStatusStream();
+      _serviceStatusStreamSubscription = serviceStatusStream.handleError((error) {
+        _serviceStatusStreamSubscription?.cancel();
+        _serviceStatusStreamSubscription = null;
+      }).listen((serviceStatus) async {
+        if (serviceStatus == geolocator.ServiceStatus.enabled) {
+          PermissionStatus status = await Permission.location.status;
+          if (status == PermissionStatus.granted) {
+            mapboxMap?.location
+                .updateSettings(LocationComponentSettings(enabled: true, pulsingEnabled: true, puckBearingEnabled: true));
+          }
+        } else {
+          mapboxMap?.location.updateSettings(LocationComponentSettings(enabled: false));
+        }
+      });
+    }
+  }
+
+  // Se solicita encenter el servicio de gps
+  statusServicesGps() async {
+    bool serviceEnabled;
+    serviceEnabled = await location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await location.requestService();
+      if (!serviceEnabled) {
+        return false;
+      }
+      return true;
+    }
+    return true;
+  }
+
+  // Funcion - Virificar Si hay preferencias de estilos guardados en la memoria
   getPreferencer() async {
     SharedPreferences prefs = await _prefs;
     _removeLayer = prefs.getBool('removeLayer') ?? false;
     _styleIndex = prefs.getInt('styleIndex') ?? 0;
   }
 
+  // Funcion - Cambiar los estilo del mapa
   onChangeMap() async {
     SharedPreferences prefs = await _prefs;
     await prefs.setInt('styleIndex', _styleIndex);
@@ -94,9 +151,15 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     }
   }
 
+  // Opciones para el controlador mapbox
   onMapCreated(MapboxMap mapboxMap) async {
     if (!hasExecuted) {
       this.mapboxMap = mapboxMap;
+      mapboxMap.subscribe(_eventObserver, [
+        MapEvents.STYLE_LOADED,
+        MapEvents.MAP_LOADED,
+        MapEvents.MAP_IDLE,
+      ]);
       PermissionStatus status = await Permission.location.status;
       if (status == PermissionStatus.granted) {
         await mapboxMap.location
@@ -108,12 +171,30 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
       } else {
         await mapboxMap.style.setStyleURI(styleStringsLayer[_styleIndex]);
       }
-
       hasExecuted = true;
     }
 
     // Cargar estilo del mapa desde Mapbox Studio
     //await mapboxMap.style.setStyleURI("mapbox://styles/algoritmia/clcb3serk000b14rop5j8cyxe");
+  }
+
+  // funcion que obtiene la posicion del dispositivo
+  _getPosition() async {
+    var position = await geolocator.Geolocator.getCurrentPosition();
+    mapboxMap?.easeTo(
+        CameraOptions(
+            center: turf.Point(
+                coordinates: turf.Position(
+              position.longitude,
+              position.latitude,
+            )).toJson(),
+            zoom: 15,
+            bearing: 0,
+            pitch: 0),
+        MapAnimationOptions(
+          duration: 1500,
+          startDelay: 0,
+        ));
   }
 
   // On Tap Map
@@ -123,7 +204,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
       // Funcion para agrega y actualizar el marcador al mapa
       if (pointAnnotation != null) {
         // var point = Point.fromJson((pointAnnotation!.geometry)!.cast());
-        var newPoint = Point(coordinates: Position(coordinate.y, coordinate.x));
+        var newPoint = turf.Point(coordinates: turf.Position(coordinate.y, coordinate.x));
         pointAnnotation?.geometry = newPoint.toJson();
         pointAnnotationManager?.update(pointAnnotation!);
       } else {
@@ -171,8 +252,8 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   createOneAnnotation(Uint8List list, double x, double y) {
     pointAnnotationManager
         ?.create(PointAnnotationOptions(
-            geometry: Point(
-                coordinates: Position(
+            geometry: turf.Point(
+                coordinates: turf.Position(
               x,
               y,
             )).toJson(),
@@ -270,6 +351,45 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     );
   }
 
+  _showBuilderToast() {
+    double width = MediaQuery.of(context).size.width;
+    fToast.showToast(
+        child: Container(
+            width: width,
+            padding: const EdgeInsets.only(left: 24.0, right: 24.0, top: 15.0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(5.0),
+              color: Colors.white,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Se rechazó el permiso a la app.'),
+                Container(
+                    alignment: Alignment.bottomRight,
+                    child: TextButton(
+                        style: TextButton.styleFrom(
+                          textStyle: const TextStyle(fontSize: 17),
+                        ),
+                        onPressed: () async {
+                          await openAppSettings();
+                        },
+                        child: const Text('Configuración'))),
+              ],
+            )),
+        gravity: ToastGravity.BOTTOM,
+        toastDuration: const Duration(seconds: 4),
+        positionedToastBuilder: (context, child) {
+          return Positioned(
+            bottom: 5.0,
+            right: 7,
+            left: 7,
+            child: child,
+          );
+        });
+  }
+
+  // Widget boton para mostrar la ubicacion
   getLocation() {
     return Positioned(
         bottom: 90,
@@ -297,10 +417,20 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
           child: IconButton(
               padding: const EdgeInsets.all(0),
               onPressed: () async {
-                var _status = await Permission.locationWhenInUse.request();
-                if (_status == PermissionStatus.granted) {
-                  mapboxMap?.location
-                      .updateSettings(LocationComponentSettings(enabled: true, pulsingEnabled: true, puckBearingEnabled: true));
+                /* bool serviceEnabled = await geolocator.Geolocator.isLocationServiceEnabled();
+                if (!serviceEnabled) {
+                  mapboxMap?.location.updateSettings(LocationComponentSettings(enabled: false));
+                } */
+                var status = await Permission.locationWhenInUse.request();
+                if (status == PermissionStatus.granted) {
+                  var statusGps = await statusServicesGps();
+                  if (statusGps) {
+                    await mapboxMap?.location
+                        .updateSettings(LocationComponentSettings(enabled: true, pulsingEnabled: true, puckBearingEnabled: true));
+                    _getPosition();
+                  }
+                } else if (status == PermissionStatus.permanentlyDenied) {
+                  _showBuilderToast();
                 }
               },
               icon: const Icon(
@@ -637,6 +767,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: globalKey,
       body: Container(
         color: Colors.black,
         child: SafeArea(
@@ -660,10 +791,11 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                 textureView: true,
                 onTapListener: _onTap,
                 cameraOptions: CameraOptions(
-                  center: Point(coordinates: Position(-73.301214, 4.0478237)).toJson(),
-                  zoom: 6,
+                  center: turf.Point(coordinates: turf.Position(_position[1], _position[0])).toJson(),
+                  zoom: _zoom,
                 ),
               ),
+            const SearchBar(),
             radiationWidget(),
             changeTypeMap(context),
             getLocation(),
