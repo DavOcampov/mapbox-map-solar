@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:mapbox_v2/widgets/widgets.dart';
+import 'package:mapbox_v2/utils/delegates/delegates.dart';
 import 'package:modal_bottom_sheet/modal_bottom_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -51,7 +51,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   int _styleIndex = 0;
   bool _removeLayer = false;
   final double _zoom = 5;
-  final List<dynamic> _position = [4.0478237, -73.301214];
+  final List<dynamic> _position = [4.0000000, -72.0000000];
   final geolocator.GeolocatorPlatform _geolocatorPlatform = geolocator.GeolocatorPlatform.instance;
   StreamSubscription<geolocator.ServiceStatus>? _serviceStatusStreamSubscription;
   loc.Location location = loc.Location();
@@ -122,15 +122,22 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   // Se solicita encenter el servicio de gps
   statusServicesGps() async {
     bool serviceEnabled;
-    serviceEnabled = await location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await location.requestService();
+
+    try {
+      serviceEnabled = await location.serviceEnabled();
       if (!serviceEnabled) {
-        return false;
+        serviceEnabled = await location.requestService();
+        if (!serviceEnabled) {
+          return false;
+        }
+        return true;
       }
       return true;
+    } on PlatformException {
+      serviceEnabled = false;
+      statusServicesGps();
+      return false;
     }
-    return true;
   }
 
   // Funcion - Virificar Si hay preferencias de estilos guardados en la memoria
@@ -351,6 +358,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     );
   }
 
+  // Toast para confirmar que se denegaron los permisos
   _showBuilderToast() {
     double width = MediaQuery.of(context).size.width;
     fToast.showToast(
@@ -764,38 +772,88 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     );
   }
 
+  btnSearch() {
+    return Positioned(
+      top: 180,
+      right: 15,
+      child: Container(
+        alignment: Alignment.center,
+        width: 40.0,
+        height: 40.0,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: const Color.fromARGB(255, 0, 0, 0),
+            width: 1,
+          ),
+          shape: BoxShape.circle,
+          color: const Color.fromARGB(255, 53, 53, 53),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              spreadRadius: 0.5,
+              blurRadius: 3,
+              offset: const Offset(0, 2), // changes position of shadow
+            ),
+          ],
+        ),
+        child: IconButton(
+            padding: const EdgeInsets.all(0),
+            onPressed: () async {
+              PermissionStatus status = await Permission.location.status;
+              if (status == PermissionStatus.granted) {
+                var statusGps = await statusServicesGps();
+                if (statusGps) {
+                  var position = await geolocator.Geolocator.getCurrentPosition();
+                  final result = await showSearch(
+                      context: context,
+                      delegate: SearchDestinationDelegate(latOrigin: position.latitude, lngOrigin: position.longitude));
+                  if (result == null) return;
+                } else {
+                  final result = await showSearch(context: context, delegate: SearchDestinationDelegate());
+                  if (result == null) return;
+                }
+              } else {
+                final result = await showSearch(context: context, delegate: SearchDestinationDelegate());
+                if (result == null) return;
+              }
+            },
+            icon: const Icon(
+              Icons.search,
+              color: Colors.white,
+              size: 23.0,
+            )),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
     return Scaffold(
       key: globalKey,
       body: Container(
         color: Colors.black,
         child: SafeArea(
           child: Stack(children: [
-            if (false)
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    CircularProgressIndicator(color: Colors.blue),
-                  ],
-                ),
-              ),
             if (true)
-              MapWidget(
-                styleUri: styleStrings[_styleIndex],
-                key: const ValueKey("mapWidget"),
-                resourceOptions: ResourceOptions(
-                    accessToken: 'sk.eyJ1IjoiYWxnb3JpdG1pYSIsImEiOiJjbGNjaTB5a2MybnUwM3Fxa3E2YnAzcDIxIn0.IcXN5w5D6BUGsPECqiaNRg'),
-                onMapCreated: onMapCreated,
-                textureView: true,
-                onTapListener: _onTap,
-                cameraOptions: CameraOptions(
-                  center: turf.Point(coordinates: turf.Position(_position[1], _position[0])).toJson(),
-                  zoom: _zoom,
+              SizedBox(
+                width: size.width,
+                height: size.height,
+                child: MapWidget(
+                  styleUri: styleStrings[_styleIndex],
+                  key: const ValueKey("mapWidget"),
+                  resourceOptions: ResourceOptions(
+                      accessToken: 'sk.eyJ1IjoiYWxnb3JpdG1pYSIsImEiOiJjbGNjaTB5a2MybnUwM3Fxa3E2YnAzcDIxIn0.IcXN5w5D6BUGsPECqiaNRg'),
+                  onMapCreated: onMapCreated,
+                  textureView: true,
+                  onTapListener: _onTap,
+                  cameraOptions: CameraOptions(
+                    center: turf.Point(coordinates: turf.Position(_position[1], _position[0])).toJson(),
+                    zoom: _zoom,
+                  ),
                 ),
               ),
-            const SearchBar(),
+            btnSearch(),
             radiationWidget(),
             changeTypeMap(context),
             getLocation(),
