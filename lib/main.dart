@@ -238,18 +238,21 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
             });
           } else {
             setState(() {
+              dniS = null;
               isLoading = false;
               dniData = 'N/A';
             });
           }
         } else {
           setState(() {
+            dniS = null;
             isLoading = false;
             dniData = 'N/A';
           });
         }
       } catch (e) {
         setState(() {
+          dniS = null;
           isLoading = false;
           dniData = 'N/A';
         });

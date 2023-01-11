@@ -187,7 +187,7 @@ class SearchDestinationDelegate extends SearchDelegate<SearchResult> {
                           context: context,
                           builder: (BuildContext context) => AlertDialog(
                                 title: Text(_records[index].text),
-                                content: const Text('¿Elimnar este lugar del historial?'),
+                                content: const Text('¿Eliminar este lugar del historial?'),
                                 actions: <Widget>[
                                   TextButton(
                                     onPressed: () => Navigator.pop(context, 'Cancel'),
