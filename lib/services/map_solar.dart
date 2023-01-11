@@ -1,5 +1,5 @@
 import 'package:http/http.dart' as http;
-import 'package:mapbox_v2/utils/delegates/places_response.dart';
+import 'package:mapbox_v2/models/places_response.dart';
 
 // server urls
 var urlServer = 'https://api.moterosyrutas.appmoterosyrutas.com';

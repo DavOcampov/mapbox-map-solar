@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mapbox_v2/models/models.dart';
 import 'package:mapbox_v2/services/map_solar.dart';
-import 'package:mapbox_v2/utils/delegates/places_response.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SearchDestinationDelegate extends SearchDelegate<SearchResult> {
@@ -45,8 +44,8 @@ class SearchDestinationDelegate extends SearchDelegate<SearchResult> {
 
   // guardamos en cache la busqueda para el historial
   _saveToCache(Feature data) async {
-    List<Feature> records = _records.where((record) {
-      return (record.text != data.text) ? true : false;
+    List<Feature> records = _records.where((item) {
+      return (item.text != data.text) ? true : false;
     }).toList();
     //
     _records = records;
@@ -56,11 +55,11 @@ class SearchDestinationDelegate extends SearchDelegate<SearchResult> {
   }
 
   // Elimanamos el item seleccionado de la cache
-  _deleteOneToCache(Feature data) async {
-    List<Feature> recosrs = _records.removeWhere((item) => item.text == data.text) as List<Feature>;
-    _records = recosrs;
+  _deleteOneToCache(Feature dataDelete, StateSetter setState) async {
+    _records.removeWhere((element) => element.text == dataDelete.text);
     SharedPreferences prefs = await _prefs;
     await prefs.setString('records', jsonEncode(_records));
+    setState(() {});
   }
 
   @override
@@ -132,63 +131,83 @@ class SearchDestinationDelegate extends SearchDelegate<SearchResult> {
 // widget q nos retorna la lista con el historial de busquedas
   @override
   Widget buildSuggestions(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 10, bottom: 10),
-      child: Column(
-        children: [
-          ListView(
-            shrinkWrap: true,
-            children: [
-              ListTile(
-                leading: const Icon(
-                  Icons.location_on,
-                  color: Colors.black,
-                ),
-                title: const Text(
-                  'Puedes buscar la ubicacion tocando el mapa!',
-                  style: TextStyle(color: Colors.black, fontFamily: 'Poppins'),
-                ),
-                onTap: () {
-                  close(context, SearchResult(cancel: true));
-                },
-              )
-            ],
-          ),
-          const Divider(),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _records.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  onTap: () async {
-                    //
-                    close(
-                      context,
-                      SearchResult(
-                        cancel: false,
-                        latDestination: _records[index].geometry.coordinates[1],
-                        lngDestination: _records[index].geometry.coordinates[0],
-                      ),
-                    );
-                    //
-                    _saveToCache(_records[index]);
+    return StatefulBuilder(builder: (BuildContext context, StateSetter setState) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10, bottom: 10),
+        child: Column(
+          children: [
+            ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(
+                  leading: const Icon(
+                    Icons.location_on,
+                    color: Colors.black,
+                  ),
+                  title: const Text(
+                    'Puedes buscar la ubicacion tocando el mapa!',
+                    style: TextStyle(color: Colors.black, fontFamily: 'Poppins'),
+                  ),
+                  onTap: () {
+                    close(context, SearchResult(cancel: true));
                   },
-                  title: Text(
-                    _records[index].text,
-                    style: const TextStyle(color: Colors.black),
-                  ),
-                  subtitle: Text(
-                    _records[index].placeName,
-                    style: const TextStyle(color: Colors.black),
-                  ),
-                  leading: const Icon(Icons.watch_later_outlined, color: Colors.black),
-                );
-              },
-              separatorBuilder: (BuildContext context, int index) => const Divider(),
+                )
+              ],
             ),
-          ),
-        ],
-      ),
-    );
+            const Divider(),
+            Expanded(
+              child: ListView.separated(
+                itemCount: _records.length,
+                itemBuilder: (context, index) {
+                  return ListTile(
+                    onTap: () async {
+                      //
+                      close(
+                        context,
+                        SearchResult(
+                          cancel: false,
+                          latDestination: _records[index].geometry.coordinates[1],
+                          lngDestination: _records[index].geometry.coordinates[0],
+                        ),
+                      );
+                      //
+                      _saveToCache(_records[index]);
+                    },
+                    title: Text(
+                      _records[index].text,
+                      style: const TextStyle(color: Colors.black),
+                    ),
+                    subtitle: Text(
+                      _records[index].placeName,
+                      style: const TextStyle(color: Colors.black),
+                    ),
+                    leading: const Icon(Icons.watch_later_outlined, color: Colors.black),
+                    onLongPress: () {
+                      showDialog<String>(
+                          context: context,
+                          builder: (BuildContext context) => AlertDialog(
+                                title: Text(_records[index].text),
+                                content: const Text('¿Elimnar este lugar del historial?'),
+                                actions: <Widget>[
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, 'Cancel'),
+                                    child: const Text('Cancelar'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => {_deleteOneToCache(_records[index], setState), Navigator.pop(context, 'OK')},
+                                    child: const Text('Aceptar'),
+                                  ),
+                                ],
+                              ));
+                    },
+                  );
+                },
+                separatorBuilder: (BuildContext context, int index) => const Divider(),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }

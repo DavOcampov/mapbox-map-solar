@@ -45,6 +45,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   PointAnnotationManager? pointAnnotationManager;
   late FToast fToast;
   String dniData = 'N/A';
+  double? dniS;
   bool hasExecuted = true;
   bool isLoading = false;
   bool isSelected = false;
@@ -232,6 +233,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
 
             setState(() {
               isLoading = false;
+              dniS = dni;
               dniData = "$dni kwh/m²/Día";
             });
           } else {
@@ -764,8 +766,10 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   btnSaveData() {
     return FloatingActionButton.extended(
       onPressed: () {
-        log(dniData);
-        Navigator.pop(context);
+        if (dniS != null) {
+          print(dniS);
+          //Navigator.pushNamed(context, "/rutaName", arguments: dniS);
+        }
       },
       label: const Text('Guardar & salir'),
       icon: const Icon(Icons.save),
