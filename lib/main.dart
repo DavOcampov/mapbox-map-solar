@@ -824,7 +824,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     mapboxMap?.easeTo(
                         CameraOptions(
                             center: turf.Point(coordinates: turf.Position(result.lngDestination!, result.latDestination!)).toJson(),
-                            zoom: 9,
+                            zoom: 13.5,
                             bearing: 0,
                             pitch: 0),
                         MapAnimationOptions(
@@ -894,6 +894,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 width: size.width,
                 height: size.height,
                 child: MapWidget(
+                  mapOptions: MapOptions(pixelRatio: 1.0),
                   styleUri: styleStrings[_styleIndex],
                   key: const ValueKey("mapWidget"),
                   resourceOptions: ResourceOptions(
