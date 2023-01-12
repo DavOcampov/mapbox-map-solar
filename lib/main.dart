@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
@@ -39,7 +38,7 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateMixin {
+class _MyHomePageState extends State<MyHomePage> {
   MapboxMap? mapboxMap;
   PointAnnotation? pointAnnotation;
   PointAnnotationManager? pointAnnotationManager;
@@ -96,6 +95,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   }
 
   _eventObserver(Event event) {
+    // ignore: avoid_print
     print("Receive event, type: ${event.type}, data: ${event.data}");
   }
 
@@ -173,7 +173,6 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
         await mapboxMap.location
             .updateSettings(LocationComponentSettings(enabled: true, pulsingEnabled: true, puckBearingEnabled: true));
       }
-      //await addLayer();
       if (_removeLayer) {
         await mapboxMap.style.setStyleURI(styleStrings[_styleIndex]);
       } else {
@@ -181,12 +180,9 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
       }
       hasExecuted = true;
     }
-
-    // Cargar estilo del mapa desde Mapbox Studio
-    //await mapboxMap.style.setStyleURI("mapbox://styles/algoritmia/clcb3serk000b14rop5j8cyxe");
   }
 
-  // funcion que obtiene la posicion del dispositivo
+  // funcion que obtiene la posicion del dispositivo y centra la camar
   _getPosition() async {
     var position = await geolocator.Geolocator.getCurrentPosition();
     mapboxMap?.easeTo(
@@ -196,7 +192,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
               position.longitude,
               position.latitude,
             )).toJson(),
-            zoom: 15,
+            zoom: 13.5,
             bearing: 0,
             pitch: 0),
         MapAnimationOptions(
@@ -208,41 +204,43 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
   // On Tap Map
   _onTap(ScreenCoordinate coordinate) async {
     if (!isLoading) {
-      log("OnTap ${coordinate.x} ${coordinate.y}");
       // Funcion para agrega y actualizar el marcador al mapa
-      if (pointAnnotation != null) {
-        // var point = Point.fromJson((pointAnnotation!.geometry)!.cast());
-        var newPoint = turf.Point(coordinates: turf.Position(coordinate.y, coordinate.x));
-        pointAnnotation?.geometry = newPoint.toJson();
-        pointAnnotationManager?.update(pointAnnotation!);
-      } else {
-        mapboxMap?.annotations.createPointAnnotationManager().then((value) async {
-          pointAnnotationManager = value;
-          final ByteData bytes = await rootBundle.load('assets/marker.png');
-          final Uint8List list = bytes.buffer.asUint8List();
-          createOneAnnotation(list, coordinate.y, coordinate.x);
-        });
-      }
+      drawPointNotation(coordinate.x, coordinate.y);
+      retunrIrradiance(coordinate.x, coordinate.y);
+    }
+  }
 
-      try {
-        var data = await getIrradiance(coordinate.x, coordinate.y);
-        if (data.isNotEmpty || data == null) {
-          if ((data["annual"]['data'] as Map)['DNI'] != null) {
-            double dniDay = ((data["annual"]['data'] as Map)['DNI']) / 365;
-            double dni = double.parse(dniDay.toStringAsFixed(2));
+  // Dibuja el marcador en el mapa
+  drawPointNotation(double x, double y) async {
+    if (pointAnnotation != null) {
+      // var point = Point.fromJson((pointAnnotation!.geometry)!.cast());
+      var newPoint = turf.Point(coordinates: turf.Position(y, x));
+      pointAnnotation?.geometry = newPoint.toJson();
+      pointAnnotationManager?.update(pointAnnotation!);
+    } else {
+      mapboxMap?.annotations.createPointAnnotationManager().then((value) async {
+        pointAnnotationManager = value;
+        final ByteData bytes = await rootBundle.load('assets/marker.png');
+        final Uint8List list = bytes.buffer.asUint8List();
+        createOneAnnotation(list, y, x);
+      });
+    }
+  }
 
-            setState(() {
-              isLoading = false;
-              dniS = dni;
-              dniData = "$dni kwh/m²/Día";
-            });
-          } else {
-            setState(() {
-              dniS = null;
-              isLoading = false;
-              dniData = 'N/A';
-            });
-          }
+  // Trae los datos de radiacion de las coordenas enviadas
+  retunrIrradiance(double x, double y) async {
+    try {
+      var data = await getIrradiance(x, y);
+      if (data.isNotEmpty || data == null) {
+        if ((data["annual"]['data'] as Map)['DNI'] != null) {
+          double dniDay = ((data["annual"]['data'] as Map)['DNI']) / 365;
+          double dni = double.parse(dniDay.toStringAsFixed(2));
+
+          setState(() {
+            isLoading = false;
+            dniS = dni;
+            dniData = "$dni kwh/m²/Día";
+          });
         } else {
           setState(() {
             dniS = null;
@@ -250,13 +248,19 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
             dniData = 'N/A';
           });
         }
-      } catch (e) {
+      } else {
         setState(() {
           dniS = null;
           isLoading = false;
           dniData = 'N/A';
         });
       }
+    } catch (e) {
+      setState(() {
+        dniS = null;
+        isLoading = false;
+        dniData = 'N/A';
+      });
     }
   }
 
@@ -779,6 +783,7 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
     );
   }
 
+  // Buton de busqueda
   btnSearch() {
     return Positioned(
       top: 180,
@@ -815,13 +820,55 @@ class _MyHomePageState extends State<MyHomePage> with SingleTickerProviderStateM
                       context: context,
                       delegate: SearchDestinationDelegate(latOrigin: position.latitude, lngOrigin: position.longitude));
                   if (result == null) return;
+                  if (!result.cancel) {
+                    mapboxMap?.easeTo(
+                        CameraOptions(
+                            center: turf.Point(coordinates: turf.Position(result.lngDestination!, result.latDestination!)).toJson(),
+                            zoom: 9,
+                            bearing: 0,
+                            pitch: 0),
+                        MapAnimationOptions(
+                          duration: 1500,
+                          startDelay: 0,
+                        ));
+                    drawPointNotation(result.latDestination!, result.lngDestination!);
+                    retunrIrradiance(result.latDestination!, result.lngDestination!);
+                  }
                 } else {
                   final result = await showSearch(context: context, delegate: SearchDestinationDelegate());
                   if (result == null) return;
+                  if (!result.cancel) {
+                    mapboxMap?.easeTo(
+                        CameraOptions(
+                            center: turf.Point(coordinates: turf.Position(result.lngDestination!, result.latDestination!)).toJson(),
+                            zoom: 9,
+                            bearing: 0,
+                            pitch: 0),
+                        MapAnimationOptions(
+                          duration: 1500,
+                          startDelay: 0,
+                        ));
+                    drawPointNotation(result.latDestination!, result.lngDestination!);
+                    retunrIrradiance(result.latDestination!, result.lngDestination!);
+                  }
                 }
               } else {
                 final result = await showSearch(context: context, delegate: SearchDestinationDelegate());
                 if (result == null) return;
+                if (!result.cancel) {
+                  mapboxMap?.easeTo(
+                      CameraOptions(
+                          center: turf.Point(coordinates: turf.Position(result.lngDestination!, result.latDestination!)).toJson(),
+                          zoom: 9,
+                          bearing: 0,
+                          pitch: 0),
+                      MapAnimationOptions(
+                        duration: 1500,
+                        startDelay: 0,
+                      ));
+                  drawPointNotation(result.latDestination!, result.lngDestination!);
+                  retunrIrradiance(result.latDestination!, result.lngDestination!);
+                }
               }
             },
             icon: const Icon(
